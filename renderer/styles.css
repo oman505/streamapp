@@ -996,3 +996,28 @@ webview { flex: 1; min-height: 0; }
   max-width: 32ch;
   line-height: 1.6;
 }
+
+
+/* ── DPlayer Fixes ── */
+.dplayer { width: 100% !important; height: 100% !important; }
+.dplayer-controller { opacity: 1 !important; background: linear-gradient(transparent, rgba(0,0,0,0.85)) !important; padding: 0 12px 8px !important; }
+.dplayer-icons { height: 44px !important; align-items: center !important; }
+.dplayer-icon { width: 36px !important; height: 36px !important; padding: 6px !important; opacity: 0.9 !important; }
+.dplayer-icon:hover { opacity: 1 !important; transform: scale(1.15) !important; }
+.dplayer-icon .dplayer-icon-content { width: 22px !important; height: 22px !important; fill: #fff !important; }
+.dplayer-play-icon .dplayer-icon-content { width: 28px !important; height: 28px !important; }
+.dplayer-full .dplayer-icon-content,
+.dplayer-full-in .dplayer-icon-content { width: 22px !important; height: 22px !important; fill: #fff !important; }
+.dplayer-volume .dplayer-icon-content { fill: #fff !important; }
+.dplayer-setting .dplayer-icon-content { fill: #fff !important; }
+.dplayer-time { font-size: 13px !important; color: #ddd !important; }
+.dplayer-bar-wrap { height: 4px !important; }
+.dplayer-bar-wrap:hover { height: 6px !important; }
+.dplayer-loaded { background: rgba(255,255,255,0.25) !important; }
+.dplayer-played { background: var(--color-accent) !important; }
+.dplayer-thumb { width: 14px !important; height: 14px !important; background: var(--color-accent) !important; box-shadow: 0 0 6px rgba(232,54,93,0.6) !important; }
+.dplayer-menu { background: rgba(10,12,20,0.95) !important; border: 1px solid var(--color-border) !important; border-radius: var(--radius-md) !important; }
+.dplayer-menu-item:hover { background: var(--color-accent-dim) !important; color: var(--color-accent) !important; }
+.dplayer-setting-box { background: rgba(10,12,20,0.95) !important; border: 1px solid var(--color-border) !important; border-radius: var(--radius-md) !important; }
+.inline-player-wrap { width: 100%; aspect-ratio: 16/9; background: #000; border-radius: 10px; overflow: hidden; margin-bottom: 16px; }
+#dplayer-container { width: 100% !important; height: 100% !important; }
