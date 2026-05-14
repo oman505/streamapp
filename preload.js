@@ -4,6 +4,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   minimize:            () => ipcRenderer.send('minimize-window'),
   maximize:            () => ipcRenderer.send('maximize-window'),
   close:               () => ipcRenderer.send('close-window'),
+    fullscreen:            () => ipcRenderer.send('fullscreen-window'),
   fetchPage:           (url)       => ipcRenderer.invoke('fetch-page', url),
   fetchImage:          (url)       => ipcRenderer.invoke('fetch-image', url),
   proxyVideo:          (url)       => ipcRenderer.invoke('proxy-video', url),

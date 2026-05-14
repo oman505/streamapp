@@ -221,8 +221,8 @@ function createWindow() {
   startProxyServer();
 
   mainWin = new BrowserWindow({
-    width: 1280, height: 800, minWidth: 900, minHeight: 600,
-    frame: false, backgroundColor: '#0d0d1a',
+        width: 1366, height: 768, minWidth: 900, minHeight: 600,
+        frame: false, fullscreenable: true, backgroundColor: '#0d0d1a',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -290,6 +290,7 @@ function createWindow() {
   ipcMain.on('minimize-window', () => mainWin.minimize());
   ipcMain.on('maximize-window', () => mainWin.isMaximized() ? mainWin.unmaximize() : mainWin.maximize());
   ipcMain.on('close-window',    () => mainWin.close());
+  ipcMain.on('fullscreen-window', () => mainWin.setFullScreen(!mainWin.isFullScreen()));
 
   ipcMain.handle('fetch-page', async (event, url) => {
     const res = await axios.get(url, {
