@@ -617,75 +617,89 @@ function createWindow() {
     });
   });
 }
-  let mpvProcess = null;
+let mpcProcess = null;
 
-async function getMpvPath() {
-  const binPath = path.join(__dirname, 'bin', 'mpv.exe');
+async function getMpcPath() {
+  const binPath = path.join(__dirname, 'bin', 'mpc-qt.exe');
   if (fs.existsSync(binPath)) return binPath;
-  // auto-download mpv portable
-  console.log('mpv not found, downloading...');
+
+  // auto-download MPC-QT portable
+  console.log('mpc-qt not found, downloading...');
   fs.mkdirSync(path.join(__dirname, 'bin'), { recursive: true });
-  const zipPath = path.join(__dirname, 'bin', 'mpv.zip');
-  const MPV_URL = 'https://sourceforge.net/projects/mpv-player-windows/files/release/mpv-0.39.0-x86_64.7z/download';
-  // Use the nightly link which returns a direct .zip
-  const DIRECT_URL = 'https://nightly.link/mpv-player/mpv/workflows/build/master/mpv-x86_64-windows.zip';
+  const zipPath = path.join(__dirname, 'bin', 'mpc-qt.zip');
+  const DOWNLOAD_URL = 'https://github.com/mpc-qt/mpc-qt/releases/download/continuous/mpc-qt-continuous-win-x86_64.zip';
+
   await new Promise((resolve, reject) => {
     const file = fs.createWriteStream(zipPath);
-    https.get(DIRECT_URL, { headers: { 'User-Agent': UA } }, res => {
-      if (res.statusCode === 302 || res.statusCode === 301) {
-        https.get(res.headers.location, { headers: { 'User-Agent': UA } }, res2 => {
-          res2.pipe(file);
-          file.on('finish', () => { file.close(); resolve(); });
-        }).on('error', reject);
-      } else {
+    const doGet = (url, depth = 0) => {
+      if (depth > 5) return reject(new Error('too many redirects'));
+      https.get(url, { headers: { 'User-Agent': UA } }, res => {
+        if (res.statusCode === 301 || res.statusCode === 302) {
+          return doGet(res.headers.location, depth + 1);
+        }
         res.pipe(file);
         file.on('finish', () => { file.close(); resolve(); });
-      }
-    }).on('error', reject);
+      }).on('error', reject);
+    };
+    doGet(DOWNLOAD_URL);
   });
-  // Extract mpv.exe from zip using Node's built-in (works for zip not 7z)
-  const AdmZip = (() => { try { return require('adm-zip'); } catch { return null; } })();
-  if (AdmZip) {
-    const zip = new AdmZip(zipPath);
-    const entry = zip.getEntries().find(e => e.entryName.endsWith('mpv.exe'));
-    if (entry) { fs.writeFileSync(binPath, entry.getData()); console.log('mpv extracted to', binPath); }
-  } else {
-    // fallback: unzip via PowerShell
-    const { execSync } = require('child_process');
-    execSync(`powershell -Command "Expand-Archive -Path '${zipPath}' -DestinationPath '${path.join(__dirname, 'bin')}' -Force"`);
-    // find mpv.exe recursively
-    const findMpv = (dir) => { for (const f of fs.readdirSync(dir, { withFileTypes: true })) { if (f.isDirectory()) { const r = findMpv(path.join(dir, f.name)); if (r) return r; } else if (f.name === 'mpv.exe') return path.join(dir, f.name); } return null; };
-    const found = findMpv(path.join(__dirname, 'bin'));
-    if (found && found !== binPath) fs.renameSync(found, binPath);
-  }
-  fs.unlinkSync(zipPath);
-  return fs.existsSync(binPath) ? binPath : 'mpv';
+
+  // Extract mpc-qt.exe using PowerShell
+  const { execSync } = require('child_process');
+  execSync(`powershell -Command "Expand-Archive -Path '${zipPath}' -DestinationPath '${path.join(__dirname, 'bin', 'mpc-qt-tmp')}' -Force"`);
+
+  // Find mpc-qt.exe recursively
+  const findExe = (dir, name) => {
+    try {
+      for (const f of fs.readdirSync(dir, { withFileTypes: true })) {
+        if (f.isDirectory()) {
+          const r = findExe(path.join(dir, f.name), name);
+          if (r) return r;
+        } else if (f.name.toLowerCase() === name) {
+          return path.join(dir, f.name);
+        }
+      }
+    } catch {}
+    return null;
+  };
+
+  const found = findExe(path.join(__dirname, 'bin', 'mpc-qt-tmp'), 'mpc-qt.exe');
+  if (found) fs.renameSync(found, binPath);
+
+  // Cleanup
+  try { fs.unlinkSync(zipPath); } catch {}
+  try {
+    const { execSync: ex } = require('child_process');
+    ex(`rmdir /s /q "${path.join(__dirname, 'bin', 'mpc-qt-tmp')}"`, { shell: true });
+  } catch {}
+
+  return fs.existsSync(binPath) ? binPath : null;
 }
 
-ipcMain.handle('play-mpv', async (_, videoUrl) => {
+ipcMain.handle('play-mpc', async (_, videoUrl) => {
   try {
-    if (mpvProcess) { try { mpvProcess.kill(); } catch {} mpvProcess = null; }
+    if (mpcProcess) {
+      try { mpcProcess.kill(); } catch {}
+      mpcProcess = null;
+    }
     const { spawn } = require('child_process');
-    const mpvBin = await getMpvPath();
-    const wid = mainWin.getNativeWindowHandle().readBigUInt64LE(0).toString();
-    mpvProcess = spawn(mpvBin, [
-      `--wid=${wid}`,
-      '--no-terminal',
-      '--keep-open=yes',
-      '--cache=yes',
-      '--demuxer-max-bytes=50MiB',
-      '--force-window=yes',
-      videoUrl
-    ], { detached: false });
-    mpvProcess.on('error', (e) => console.error('mpv error:', e.message));
-    mpvProcess.on('close', () => { mpvProcess = null; });
-    return { ok: true, bin: mpvBin };
+    const mpcBin = await getMpcPath();
+    if (!mpcBin) return { ok: false, error: 'mpc-qt.exe not found and download failed' };
+    mpcProcess = spawn(mpcBin, [videoUrl], { detached: true, stdio: 'ignore' });
+    mpcProcess.unref();
+    mpcProcess.on('error', (e) => console.error('mpc-qt error:', e.message));
+    mpcProcess.on('close', () => { mpcProcess = null; });
+    return { ok: true, bin: mpcBin };
   } catch (e) {
     return { ok: false, error: e.message };
   }
 });
-ipcMain.on('stop-mpv', () => {
-  if (mpvProcess) { try { mpvProcess.kill(); } catch {} mpvProcess = null; }
+
+ipcMain.on('stop-mpc', () => {
+  if (mpcProcess) {
+    try { mpcProcess.kill(); } catch {}
+    mpcProcess = null;
+  }
 });
 
 app.whenReady().then(createWindow);

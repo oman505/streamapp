@@ -163,13 +163,12 @@ async function loadServer(url, btn) {
   }
 
   if (loading) loading.remove();
-  const mpvBtn = document.createElement('button');
-  mpvBtn.id = 'mpv-btn';
-  mpvBtn.textContent = '🎬 تشغيل بـ MPV';
-  mpvBtn.style.cssText = 'display:block;margin:6px 0 10px;padding:8px 20px;background:#7c3aed;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;';
-  mpvBtn.onclick = async () => { mpvBtn.textContent = '⏳...'; mpvBtn.disabled=true; const r=await window.electronAPI.playMpv(playableUrl); mpvBtn.textContent = r?.ok ? '✅ MPV يعمل' : ('❌ '+(r?.error||'فشل')); if(!r?.ok) mpvBtn.disabled=false; };
-  document.getElementById('player-wrap')?.prepend(mpvBtn);
-
+const mpcBtn = document.createElement('button');
+  mpcBtn.id = 'mpc-btn';
+  mpcBtn.textContent = '🎬 تشغيل بـ MPC-QT';
+  mpcBtn.style.cssText = 'display:block;margin:6px 0 10px;padding:8px 20px;background:#7c3aed;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;width:100%;';
+  mpcBtn.onclick = async () => { mpcBtn.textContent = '⏳...'; mpcBtn.disabled=true; const r=await window.electronAPI.playMpc(playableUrl); mpcBtn.textContent = r?.ok ? '✅ MPC-QT يعمل' : ('❌ '+(r?.error||'فشل')); if(!r?.ok) mpcBtn.disabled=false; };
+  document.getElementById('player-wrap')?.prepend(mpcBtn);
   currentDPlayer = new DPlayer({
     container: document.getElementById('dplayer-container'),
     autoplay: true,
