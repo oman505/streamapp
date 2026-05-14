@@ -433,10 +433,13 @@ function createWindow() {
     const partition = `persist:extract_${++extractCount}`;
     const host      = (() => { try { return new URL(serverUrl).hostname; } catch { return ''; } })();
     const isDood    = host.includes('dood') || host.includes('dsvplay') || host.includes('doodstream');
-    const isVoe     = host.includes('voe');
-    const isLarhu   = host.includes('larhu');
-    const isUqload  = host.includes('uqload');
-    const isShare4  = host.includes('share4max');
+const isVoe     = host.includes('voe.sx') || host.includes('voe.click') || host.includes('voe.bar') || host.includes('voe');
+const isVk      = host.includes('vk.com') || host.includes('vkvideo.ru');
+const isVidea   = host.includes('videa.hu');
+const isMegamax = host.includes('megamax') || host.includes('mega4up');
+const isLarhu   = host.includes('larhu');
+const isUqload  = host.includes('uqload');
+const isShare4  = host.includes('share4max');
 
     return new Promise((resolve) => {
       const win = new BrowserWindow({
@@ -478,8 +481,7 @@ function createWindow() {
 
       win.webContents.on('did-finish-load', async () => {
         try {
-          const waitTime = isDood ? 14000 : isVoe ? 6000 : isLarhu ? 8000 : isUqload ? 8000 : isShare4 ? 10000 : 8000;
-          await new Promise(r => setTimeout(r, waitTime));
+          const waitTime = isDood ? 18000 : isVoe ? 12000 : isVk ? 14000 : isVidea ? 14000 : isMegamax ? 10000 : isLarhu ? 8000 : isUqload ? 8000 : isShare4 ? 10000 : 10000;
           if (resolved) return;
 
           const videoUrl = await win.webContents.executeJavaScript(`

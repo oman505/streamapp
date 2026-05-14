@@ -33,6 +33,7 @@
     <div class="window-controls">
       <button class="wc-btn" id="min-btn" title="تصغير">&#x2014;</button>
       <button class="wc-btn" id="max-btn" title="تكبير">&#x25A1;</button>
+            <button class="wc-btn" id="fs-btn" title="ملء الشاشة">&#x26F6;</button>
       <button class="wc-btn wc-close" id="close-btn" title="إغلاق">&#x2715;</button>
     </div>
   </header>
@@ -95,6 +96,10 @@
   document.getElementById('close-btn').addEventListener('click', () => {
     if (window.electronAPI?.close) window.electronAPI.close();
     else try { require('electron').ipcRenderer.send('close-window'); } catch(e) {}
+  });
+    document.getElementById('fs-btn').addEventListener('click', () => {
+    if (window.electronAPI?.fullscreen) window.electronAPI.fullscreen();
+    else try { require('electron').ipcRenderer.send('fullscreen-window'); } catch(e) {}
   });
 </script>
 </body>
