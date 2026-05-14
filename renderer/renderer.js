@@ -128,12 +128,16 @@ async function loadServer(url, btn) {
   const wrap = document.getElementById('player-wrap');
   if (!wrap) return;
 
-  // Stop old video if any
-  const _ov = wrap.querySelector('video');
-  if (_ov) { try { _ov.pause(); _ov.src = ''; } catch {} }
-  wrap.innerHTML = '<div id="player-loading" style="padding:24px;text-align:center;color:#aaa;">⏳ جاري استخراج رابط الفيديو...</div>';
+  if (currentDPlayer) {
+    try { currentDPlayer.destroy(); } catch {}
+    currentDPlayer = null;
+  }
 
-    if (!url || !url.startsWith('http')) {
+  wrap.innerHTML = `
+    <div id="dplayer-container"></div>
+    <div id="player-loading" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.85);color:#fff;font-size:15px;z-index:10;border-radius:8px;">⏳ جاري استخراج رابط الفيديو...</div>`;
+
+  if (!url || !url.startsWith('http')) {
     const loading = document.getElementById('player-loading');
     if (loading) loading.textContent = '❌ رابط السيرفر غير صالح';
     return;
@@ -159,126 +163,122 @@ async function loadServer(url, btn) {
 
   if (loading) loading.remove();
 
-  // ===== Built-in Video Player =====
+  // ===== Launch MPV Native Player =====
   const wrap = document.getElementById('player-wrap');
   if (!wrap) return;
-
-  // Stop old video if any
-  const _old = wrap.querySelector('video');
-  if (_old) { try { _old.pause(); _old.src = ''; } catch {} }
   wrap.innerHTML = '';
 
-  const shell = document.createElement('div');
-  shell.style.cssText = 'position:relative;width:100%;background:#000;border-radius:10px;overflow:hidden;user-select:none;';
+  // Download progress notification
+  window.electronAPI.onMpvDownload((data) => {
+    const dl = document.getElementById('mpv-dl-msg');
+    if (!dl) return;
+    if (data.status === 'downloading') dl.textContent = '⏳ جاري تحميل MPV...';
+    else if (data.status === 'extracting') dl.textContent = '📦 جاري استخراج MPV...';
+    else if (data.status === 'done') dl.textContent = '✅ تم تحميل MPV';
+  });
 
-  const vid = document.createElement('video');
-  vid.style.cssText = 'width:100%;max-height:72vh;display:block;background:#000;cursor:pointer;';
-  vid.playsInline = true;
-  vid.preload = 'auto';
-  vid.addEventListener('click', () => vid.paused ? vid.play() : vid.pause());
+  // Build MPV control panel
+  const panel = document.createElement('div');
+  panel.style.cssText = 'background:#111;border-radius:12px;padding:20px;color:#fff;text-align:center;';
 
-  // Load source (HLS or direct)
-  if (playableUrl.includes('.m3u8')) {
-    if (window.Hls && Hls.isSupported()) {
-      const hls = new Hls();
-      hls.loadSource(playableUrl);
-      hls.attachMedia(vid);
-      hls.on(Hls.Events.MANIFEST_PARSED, () => vid.play().catch(()=>{}));
-    } else {
-      vid.src = playableUrl;
-      vid.play().catch(()=>{});
-    }
-  } else {
-    vid.src = playableUrl;
-    vid.addEventListener('canplay', () => vid.play().catch(()=>{}), { once: true });
-  }
+  const title = document.createElement('div');
+  title.style.cssText = 'font-size:15px;font-weight:600;margin-bottom:16px;color:#a78bfa;';
+  title.textContent = '🎬 MPV Native Player';
 
-  // === Controls ===
-  const bar = document.createElement('div');
-  bar.style.cssText = 'position:absolute;bottom:0;left:0;right:0;padding:0 12px 10px;background:linear-gradient(transparent,rgba(0,0,0,.9));display:flex;flex-direction:column;gap:5px;transition:opacity .3s;';
+  const dlMsg = document.createElement('div');
+  dlMsg.id = 'mpv-dl-msg';
+  dlMsg.style.cssText = 'font-size:12px;color:#888;margin-bottom:10px;min-height:18px;';
 
-  // Progress row
-  const prog = document.createElement('div');
-  prog.style.cssText = 'width:100%;height:5px;background:rgba(255,255,255,.25);border-radius:3px;cursor:pointer;position:relative;';
+  const statusEl = document.createElement('div');
+  statusEl.style.cssText = 'font-size:13px;color:#aaa;margin-bottom:14px;min-height:20px;';
+  statusEl.textContent = '⏳ جاري تشغيل الفيديو...';
+
+  // Time display
+  const timeEl = document.createElement('div');
+  timeEl.style.cssText = 'font-size:13px;color:#ccc;margin-bottom:10px;font-family:monospace;';
+  timeEl.textContent = '0:00 / 0:00';
+
+  // Progress bar
+  const progWrap = document.createElement('div');
+  progWrap.style.cssText = 'width:100%;height:6px;background:#333;border-radius:3px;cursor:pointer;margin-bottom:14px;';
   const progFill = document.createElement('div');
-  progFill.style.cssText = 'height:100%;width:0;background:#7c3aed;border-radius:3px;pointer-events:none;';
-  prog.appendChild(progFill);
-  prog.addEventListener('click', e => {
-    if (!vid.duration) return;
-    const rect = prog.getBoundingClientRect();
-    vid.currentTime = ((e.clientX - rect.left) / rect.width) * vid.duration;
-  });
-  vid.addEventListener('timeupdate', () => {
-    if (vid.duration) progFill.style.width = (vid.currentTime / vid.duration * 100) + '%';
+  progFill.style.cssText = 'height:100%;width:0%;background:#7c3aed;border-radius:3px;pointer-events:none;transition:width .5s;';
+  progWrap.appendChild(progFill);
+  let mpvDuration = 0;
+  progWrap.addEventListener('click', async e => {
+    if (!mpvDuration) return;
+    const r = progWrap.getBoundingClientRect();
+    const sec = ((e.clientX - r.left) / r.width) * mpvDuration;
+    await window.electronAPI.mpvSeek(sec);
   });
 
-  // Buttons row
-  const brow = document.createElement('div');
-  brow.style.cssText = 'display:flex;align-items:center;gap:6px;';
+  // Buttons
+  const btnRow = document.createElement('div');
+  btnRow.style.cssText = 'display:flex;justify-content:center;gap:10px;flex-wrap:wrap;margin-bottom:12px;';
 
-  const mk = (html, tip) => {
+  const mk = (label, tip, color='#7c3aed') => {
     const b = document.createElement('button');
-    b.innerHTML = html; b.title = tip;
-    b.style.cssText = 'background:none;border:none;color:#fff;cursor:pointer;padding:3px 5px;font-size:18px;line-height:1;display:flex;align-items:center;';
+    b.textContent = label; b.title = tip;
+    b.style.cssText = `padding:8px 16px;background:${color};color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;`;
     return b;
   };
 
-  // Play/Pause
-  const pb = mk('&#9654;','Play/Pause');
-  pb.addEventListener('click', () => vid.paused ? vid.play() : vid.pause());
-  vid.addEventListener('play',  () => pb.innerHTML = '&#9646;&#9646;');
-  vid.addEventListener('pause', () => pb.innerHTML = '&#9654;');
+  const pauseBtn = mk('⏯️ تشغيل/إيقاف', 'Play/Pause');
+  const stopBtn  = mk('⏹️ إيقاف', 'Stop', '#374151');
 
-  // Time
-  const timeSpan = document.createElement('span');
-  timeSpan.style.cssText = 'color:#ddd;font-size:12px;white-space:nowrap;min-width:95px;';
-  timeSpan.textContent = '0:00 / 0:00';
-  const fmtT = s => isNaN(s) ? '0:00' : Math.floor(s/60)+':'+(Math.floor(s%60)<10?'0':'')+Math.floor(s%60);
-  vid.addEventListener('timeupdate', () => timeSpan.textContent = fmtT(vid.currentTime)+' / '+fmtT(vid.duration));
+  pauseBtn.addEventListener('click', () => window.electronAPI.mpvPause());
+  stopBtn.addEventListener('click', () => { window.electronAPI.mpvStop(); statusEl.textContent = '⏹️ متوقف'; });
 
-  // Mute
-  const mb = mk('&#128266;','Mute');
-  mb.addEventListener('click', () => { vid.muted=!vid.muted; mb.innerHTML=vid.muted?'&#128263;':'&#128266;'; });
+  // Volume
+  const volRow = document.createElement('div');
+  volRow.style.cssText = 'display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:8px;';
+  const volLabel = document.createElement('span');
+  volLabel.textContent = '🔊 صوت:';
+  volLabel.style.cssText = 'font-size:13px;color:#aaa;';
+  const volSlider = document.createElement('input');
+  volSlider.type='range'; volSlider.min=0; volSlider.max=150; volSlider.step=5; volSlider.value=100;
+  volSlider.style.cssText = 'width:120px;accent-color:#7c3aed;cursor:pointer;';
+  volSlider.addEventListener('input', () => window.electronAPI.mpvVolume(parseInt(volSlider.value)));
+  const volVal = document.createElement('span');
+  volVal.textContent = '100%'; volVal.style.cssText = 'font-size:12px;color:#aaa;min-width:36px;';
+  volSlider.addEventListener('input', () => { volVal.textContent = volSlider.value+'%'; });
+  volRow.append(volLabel, volSlider, volVal);
 
-  // Volume slider
-  const vs = document.createElement('input');
-  vs.type='range'; vs.min=0; vs.max=1; vs.step=0.05; vs.value=1;
-  vs.style.cssText = 'width:65px;cursor:pointer;accent-color:#7c3aed;';
-  vs.addEventListener('input', () => { vid.volume=vs.value; vid.muted=false; mb.innerHTML='&#128266;'; });
+  const hint = document.createElement('div');
+  hint.style.cssText = 'font-size:11px;color:#555;margin-top:8px;';
+  hint.textContent = 'MPV يعمل في نافذة مستقلة — يمكنك التحكم به من هنا';
 
-  // Spacer
-  const sp = document.createElement('div');
-  sp.style.flex = '1';
+  btnRow.append(pauseBtn, stopBtn);
+  panel.append(title, dlMsg, statusEl, timeEl, progWrap, btnRow, volRow, hint);
+  wrap.appendChild(panel);
 
-  // Speed
-  const speedSel = document.createElement('select');
-  speedSel.style.cssText = 'background:#222;color:#fff;border:none;border-radius:4px;padding:2px 4px;font-size:12px;cursor:pointer;';
-  ['0.5','0.75','1','1.25','1.5','2'].forEach(v => {
-    const o = document.createElement('option');
-    o.value = v; o.textContent = v+'x';
-    if (v === '1') o.selected = true;
-    speedSel.appendChild(o);
+  // Listen for MPV events
+  const fmtT = s => { if (!s || isNaN(s)) return '0:00'; const m=Math.floor(s/60),sec=Math.floor(s%60); return m+':'+(sec<10?'0':'')+sec; };
+  window.electronAPI.onMpvEvent((ev) => {
+    if (ev.type === 'stopped') { statusEl.textContent = '⏹️ انتهى التشغيل'; }
+    else if (ev.type === 'paused') { statusEl.textContent = '⏸️ متوقف مؤقتاً'; pauseBtn.textContent = '▶️ استمرار'; }
+    else if (ev.type === 'playing') { statusEl.textContent = '▶️ يعمل...'; pauseBtn.textContent = '⏯️ تشغيل/إيقاف'; }
+    else if (ev.type === 'time') {
+      const t = ev.time || 0;
+      timeEl.textContent = fmtT(t) + ' / ' + fmtT(mpvDuration);
+      if (mpvDuration) progFill.style.width = (t / mpvDuration * 100) + '%';
+    }
   });
-  speedSel.addEventListener('change', () => vid.playbackRate = parseFloat(speedSel.value));
 
-  // Fullscreen
-  const fsb = mk('&#x26F6;','Fullscreen');
-  fsb.addEventListener('click', () => shell.requestFullscreen ? shell.requestFullscreen() : vid.webkitRequestFullscreen?.());
+  // Start playback
+  const result = await window.electronAPI.mpvPlay(playableUrl);
+  if (!result?.ok) {
+    statusEl.textContent = '❌ خطأ: ' + (result?.error || 'فشل تشغيل MPV');
+    return;
+  }
+  statusEl.textContent = '▶️ يعمل...';
 
-  brow.append(pb, timeSpan, mb, vs, sp, speedSel, fsb);
-  bar.append(prog, brow);
-
-  // Auto-hide controls
-  let _ht;
-  const showBar = () => { bar.style.opacity='1'; clearTimeout(_ht); _ht=setTimeout(()=>{ if(!vid.paused) bar.style.opacity='0'; },3500); };
-  shell.addEventListener('mousemove', showBar);
-  shell.addEventListener('mouseleave', () => { if(!vid.paused) bar.style.opacity='0'; });
-  vid.addEventListener('pause', () => bar.style.opacity='1');
-
-  shell.append(vid, bar);
-  wrap.appendChild(shell);
+  // Poll for duration
+  const pollDur = setInterval(async () => {
+    const st = await window.electronAPI.mpvStatus();
+    if (st?.duration) { mpvDuration = st.duration; clearInterval(pollDur); }
+  }, 1500);
 }
-
 function extractCardsFrom(container) {
   const selectors = [
     '.anime-card-poster', '.pinned-card', '.anime-card-container',

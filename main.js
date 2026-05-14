@@ -618,6 +618,127 @@ function createWindow() {
   });
 }
 
+// ===== MPV Native Player =====
+let mpvPlayer = null;
+let mpvReady = false;
+
+async function getMpvBinary() {
+  const binPath = path.join(__dirname, 'bin', 'mpv.exe');
+  if (fs.existsSync(binPath)) return binPath;
+
+  console.log('[MPV] mpv.exe not found, downloading...');
+  mainWin.webContents.send('mpv-download-progress', { status: 'downloading' });
+
+  fs.mkdirSync(path.join(__dirname, 'bin'), { recursive: true });
+  const zipPath = path.join(__dirname, 'bin', 'mpv.zip');
+  const URL = 'https://nightly.link/mpv-player/mpv/workflows/build/master/mpv-x86_64-windows.zip';
+
+  await new Promise((resolve, reject) => {
+    const file = fs.createWriteStream(zipPath);
+    const doGet = (url, depth = 0) => {
+      if (depth > 5) return reject(new Error('too many redirects'));
+      https.get(url, { headers: { 'User-Agent': UA } }, res => {
+        if (res.statusCode === 301 || res.statusCode === 302) return doGet(res.headers.location, depth + 1);
+        res.pipe(file);
+        file.on('finish', () => { file.close(); resolve(); });
+      }).on('error', reject);
+    };
+    doGet(URL);
+  });
+
+  mainWin.webContents.send('mpv-download-progress', { status: 'extracting' });
+
+  const { execSync } = require('child_process');
+  const extractDir = path.join(__dirname, 'bin', '_mpv_tmp');
+  execSync(`powershell -Command "Expand-Archive -Path '${zipPath}' -DestinationPath '${extractDir}' -Force"`);
+
+  const findExe = (dir) => {
+    try {
+      for (const f of fs.readdirSync(dir, { withFileTypes: true })) {
+        if (f.isDirectory()) { const r = findExe(path.join(dir, f.name)); if (r) return r; }
+        else if (f.name.toLowerCase() === 'mpv.exe') return path.join(dir, f.name);
+      }
+    } catch {}
+    return null;
+  };
+  const found = findExe(extractDir);
+  if (found) fs.renameSync(found, binPath);
+
+  try { fs.unlinkSync(zipPath); } catch {}
+  try { execSync(`rmdir /s /q "${extractDir}"`, { shell: true }); } catch {}
+
+  mainWin.webContents.send('mpv-download-progress', { status: 'done' });
+  return fs.existsSync(binPath) ? binPath : null;
+}
+
+async function initMpv() {
+  if (mpvPlayer && mpvReady) return true;
+  try {
+    const bin = await getMpvBinary();
+    if (!bin) return false;
+    const MpvAPI = require('node-mpv');
+    mpvPlayer = new MpvAPI({
+      binary: bin,
+      socket: process.platform === 'win32' ? '\\\\.\\pipe\\node-mpv' : '/tmp/node-mpv',
+      verbose: false,
+      debug: false,
+      time_update: 1,
+      auto_restart: false,
+    }, [
+      '--keep-open=yes',
+      '--force-window=yes',
+      '--ontop=no',
+      '--cache=yes',
+      '--demuxer-max-bytes=50MiB',
+      '--no-terminal',
+      '--title=StreamApp Player',
+      '--geometry=50%:50%',
+      '--autofit=80%x70%',
+    ]);
+    await mpvPlayer.start();
+    mpvReady = true;
+    mpvPlayer.on('stopped', () => { mainWin.webContents.send('mpv-event', { type: 'stopped' }); });
+    mpvPlayer.on('paused',  () => { mainWin.webContents.send('mpv-event', { type: 'paused' }); });
+    mpvPlayer.on('resumed', () => { mainWin.webContents.send('mpv-event', { type: 'playing' }); });
+    mpvPlayer.on('timeposition', (t) => { mainWin.webContents.send('mpv-event', { type: 'time', time: t }); });
+    console.log('[MPV] node-mpv ready');
+    return true;
+  } catch (e) {
+    console.error('[MPV] init error:', e.message);
+    mpvReady = false;
+    mpvPlayer = null;
+    return false;
+  }
+}
+
+ipcMain.handle('mpv-play', async (_, videoUrl) => {
+  try {
+    const ok = await initMpv();
+    if (!ok) return { ok: false, error: 'MPV init failed' };
+    await mpvPlayer.load(videoUrl, 'replace');
+    return { ok: true };
+  } catch (e) { return { ok: false, error: e.message }; }
+});
+
+ipcMain.handle('mpv-pause',  async () => { try { await mpvPlayer?.togglePause(); return { ok: true }; } catch (e) { return { ok: false, error: e.message }; } });
+ipcMain.handle('mpv-stop',   async () => { try { await mpvPlayer?.stop(); return { ok: true }; } catch (e) { return { ok: false, error: e.message }; } });
+ipcMain.handle('mpv-seek',   async (_, seconds) => { try { await mpvPlayer?.seek(seconds, 'absolute'); return { ok: true }; } catch (e) { return { ok: false, error: e.message }; } });
+ipcMain.handle('mpv-volume', async (_, vol) => { try { await mpvPlayer?.volume(vol); return { ok: true }; } catch (e) { return { ok: false, error: e.message }; } });
+ipcMain.handle('mpv-status', async () => {
+  try {
+    if (!mpvReady || !mpvPlayer) return { ready: false };
+    const paused = await mpvPlayer.getProperty('pause').catch(() => true);
+    const time   = await mpvPlayer.getProperty('time-pos').catch(() => 0);
+    const dur    = await mpvPlayer.getProperty('duration').catch(() => 0);
+    const vol    = await mpvPlayer.getProperty('volume').catch(() => 100);
+    return { ready: true, paused, time, duration: dur, volume: vol };
+  } catch (e) { return { ready: false }; }
+});
+
+app.on('before-quit', async () => {
+  if (mpvPlayer && mpvReady) { try { await mpvPlayer.quit(); } catch {} }
+});
+
 
 app.whenReady().then(createWindow);
 app.on('window-all-closed', () => {

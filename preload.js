@@ -15,4 +15,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   fetchGithubFile:      (url) =>         ipcRenderer.invoke('fetch-github-file', url),
   fetchAnilistTitles:   (title) =>       ipcRenderer.invoke('fetch-anilist-titles', title),
   fetchPageFull:        (url) =>         ipcRenderer.invoke('fetch-page-full', url),
+  // MPV Native Player
+  mpvPlay:              (url) =>         ipcRenderer.invoke('mpv-play', url),
+  mpvPause:             () =>            ipcRenderer.invoke('mpv-pause'),
+  mpvStop:              () =>            ipcRenderer.invoke('mpv-stop'),
+  mpvSeek:              (sec) =>         ipcRenderer.invoke('mpv-seek', sec),
+  mpvVolume:            (vol) =>         ipcRenderer.invoke('mpv-volume', vol),
+  mpvStatus:            () =>            ipcRenderer.invoke('mpv-status'),
+  onMpvEvent:           (cb) =>          ipcRenderer.on('mpv-event', (_, data) => cb(data)),
+  onMpvDownload:        (cb) =>          ipcRenderer.on('mpv-download-progress', (_, data) => cb(data)),
 });
