@@ -6,7 +6,6 @@ const playerArea = document.getElementById('player-area');
 const animeGrid = document.getElementById('anime-grid');
 const BASE = 'https://w1.anime4up.rest';
 
-let currentDPlayer = null;
 let currentSection = 'anime4up';
 let gofileHistory = [];
 let githubFileList = null;
@@ -129,16 +128,12 @@ async function loadServer(url, btn) {
   const wrap = document.getElementById('player-wrap');
   if (!wrap) return;
 
-  if (currentDPlayer) {
-    try { currentDPlayer.destroy(); } catch {}
-    currentDPlayer = null;
-  }
+  // Stop old video if any
+  const _ov = wrap.querySelector('video');
+  if (_ov) { try { _ov.pause(); _ov.src = ''; } catch {} }
+  wrap.innerHTML = '<div id="player-loading" style="padding:24px;text-align:center;color:#aaa;">⏳ جاري استخراج رابط الفيديو...</div>';
 
-  wrap.innerHTML = `
-    <div id="dplayer-container"></div>
-    <div id="player-loading" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.85);color:#fff;font-size:15px;z-index:10;border-radius:8px;">⏳ جاري استخراج رابط الفيديو...</div>`;
-
-  if (!url || !url.startsWith('http')) {
+    if (!url || !url.startsWith('http')) {
     const loading = document.getElementById('player-loading');
     if (loading) loading.textContent = '❌ رابط السيرفر غير صالح';
     return;
@@ -163,29 +158,125 @@ async function loadServer(url, btn) {
   }
 
   if (loading) loading.remove();
-const mpcBtn = document.createElement('button');
-  mpcBtn.id = 'mpc-btn';
-  mpcBtn.textContent = '🎬 تشغيل بـ MPC-QT';
-  mpcBtn.style.cssText = 'display:block;margin:6px 0 10px;padding:8px 20px;background:#7c3aed;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;width:100%;';
-  mpcBtn.onclick = async () => { mpcBtn.textContent = '⏳...'; mpcBtn.disabled=true; const r=await window.electronAPI.playMpc(playableUrl); mpcBtn.textContent = r?.ok ? '✅ MPC-QT يعمل' : ('❌ '+(r?.error||'فشل')); if(!r?.ok) mpcBtn.disabled=false; };
-  document.getElementById('player-wrap')?.prepend(mpcBtn);
-  currentDPlayer = new DPlayer({
-    container: document.getElementById('dplayer-container'),
-    autoplay: true,
-    theme: '#029dbc',
-    lang: 'ar',
-    video: {
-      url: playableUrl,
-      type: videoUrl.includes('.m3u8') ? 'hls' : 'auto',
-      customType: {
-        hls: (video) => {
-          const hls = new Hls();
-          hls.loadSource(video.src);
-          hls.attachMedia(video);
-        },
-      },
-    },
+
+  // ===== Built-in Video Player =====
+  const wrap = document.getElementById('player-wrap');
+  if (!wrap) return;
+
+  // Stop old video if any
+  const _old = wrap.querySelector('video');
+  if (_old) { try { _old.pause(); _old.src = ''; } catch {} }
+  wrap.innerHTML = '';
+
+  const shell = document.createElement('div');
+  shell.style.cssText = 'position:relative;width:100%;background:#000;border-radius:10px;overflow:hidden;user-select:none;';
+
+  const vid = document.createElement('video');
+  vid.style.cssText = 'width:100%;max-height:72vh;display:block;background:#000;cursor:pointer;';
+  vid.playsInline = true;
+  vid.preload = 'auto';
+  vid.addEventListener('click', () => vid.paused ? vid.play() : vid.pause());
+
+  // Load source (HLS or direct)
+  if (playableUrl.includes('.m3u8')) {
+    if (window.Hls && Hls.isSupported()) {
+      const hls = new Hls();
+      hls.loadSource(playableUrl);
+      hls.attachMedia(vid);
+      hls.on(Hls.Events.MANIFEST_PARSED, () => vid.play().catch(()=>{}));
+    } else {
+      vid.src = playableUrl;
+      vid.play().catch(()=>{});
+    }
+  } else {
+    vid.src = playableUrl;
+    vid.addEventListener('canplay', () => vid.play().catch(()=>{}), { once: true });
+  }
+
+  // === Controls ===
+  const bar = document.createElement('div');
+  bar.style.cssText = 'position:absolute;bottom:0;left:0;right:0;padding:0 12px 10px;background:linear-gradient(transparent,rgba(0,0,0,.9));display:flex;flex-direction:column;gap:5px;transition:opacity .3s;';
+
+  // Progress row
+  const prog = document.createElement('div');
+  prog.style.cssText = 'width:100%;height:5px;background:rgba(255,255,255,.25);border-radius:3px;cursor:pointer;position:relative;';
+  const progFill = document.createElement('div');
+  progFill.style.cssText = 'height:100%;width:0;background:#7c3aed;border-radius:3px;pointer-events:none;';
+  prog.appendChild(progFill);
+  prog.addEventListener('click', e => {
+    if (!vid.duration) return;
+    const rect = prog.getBoundingClientRect();
+    vid.currentTime = ((e.clientX - rect.left) / rect.width) * vid.duration;
   });
+  vid.addEventListener('timeupdate', () => {
+    if (vid.duration) progFill.style.width = (vid.currentTime / vid.duration * 100) + '%';
+  });
+
+  // Buttons row
+  const brow = document.createElement('div');
+  brow.style.cssText = 'display:flex;align-items:center;gap:6px;';
+
+  const mk = (html, tip) => {
+    const b = document.createElement('button');
+    b.innerHTML = html; b.title = tip;
+    b.style.cssText = 'background:none;border:none;color:#fff;cursor:pointer;padding:3px 5px;font-size:18px;line-height:1;display:flex;align-items:center;';
+    return b;
+  };
+
+  // Play/Pause
+  const pb = mk('&#9654;','Play/Pause');
+  pb.addEventListener('click', () => vid.paused ? vid.play() : vid.pause());
+  vid.addEventListener('play',  () => pb.innerHTML = '&#9646;&#9646;');
+  vid.addEventListener('pause', () => pb.innerHTML = '&#9654;');
+
+  // Time
+  const timeSpan = document.createElement('span');
+  timeSpan.style.cssText = 'color:#ddd;font-size:12px;white-space:nowrap;min-width:95px;';
+  timeSpan.textContent = '0:00 / 0:00';
+  const fmtT = s => isNaN(s) ? '0:00' : Math.floor(s/60)+':'+(Math.floor(s%60)<10?'0':'')+Math.floor(s%60);
+  vid.addEventListener('timeupdate', () => timeSpan.textContent = fmtT(vid.currentTime)+' / '+fmtT(vid.duration));
+
+  // Mute
+  const mb = mk('&#128266;','Mute');
+  mb.addEventListener('click', () => { vid.muted=!vid.muted; mb.innerHTML=vid.muted?'&#128263;':'&#128266;'; });
+
+  // Volume slider
+  const vs = document.createElement('input');
+  vs.type='range'; vs.min=0; vs.max=1; vs.step=0.05; vs.value=1;
+  vs.style.cssText = 'width:65px;cursor:pointer;accent-color:#7c3aed;';
+  vs.addEventListener('input', () => { vid.volume=vs.value; vid.muted=false; mb.innerHTML='&#128266;'; });
+
+  // Spacer
+  const sp = document.createElement('div');
+  sp.style.flex = '1';
+
+  // Speed
+  const speedSel = document.createElement('select');
+  speedSel.style.cssText = 'background:#222;color:#fff;border:none;border-radius:4px;padding:2px 4px;font-size:12px;cursor:pointer;';
+  ['0.5','0.75','1','1.25','1.5','2'].forEach(v => {
+    const o = document.createElement('option');
+    o.value = v; o.textContent = v+'x';
+    if (v === '1') o.selected = true;
+    speedSel.appendChild(o);
+  });
+  speedSel.addEventListener('change', () => vid.playbackRate = parseFloat(speedSel.value));
+
+  // Fullscreen
+  const fsb = mk('&#x26F6;','Fullscreen');
+  fsb.addEventListener('click', () => shell.requestFullscreen ? shell.requestFullscreen() : vid.webkitRequestFullscreen?.());
+
+  brow.append(pb, timeSpan, mb, vs, sp, speedSel, fsb);
+  bar.append(prog, brow);
+
+  // Auto-hide controls
+  let _ht;
+  const showBar = () => { bar.style.opacity='1'; clearTimeout(_ht); _ht=setTimeout(()=>{ if(!vid.paused) bar.style.opacity='0'; },3500); };
+  shell.addEventListener('mousemove', showBar);
+  shell.addEventListener('mouseleave', () => { if(!vid.paused) bar.style.opacity='0'; });
+  vid.addEventListener('pause', () => bar.style.opacity='1');
+
+  shell.append(vid, bar);
+  wrap.appendChild(shell);
 }
 
 function extractCardsFrom(container) {

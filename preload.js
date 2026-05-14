@@ -15,6 +15,4 @@ contextBridge.exposeInMainWorld('electronAPI', {
   fetchGithubFile:      (url) =>         ipcRenderer.invoke('fetch-github-file', url),
   fetchAnilistTitles:   (title) =>       ipcRenderer.invoke('fetch-anilist-titles', title),
   fetchPageFull:        (url) =>         ipcRenderer.invoke('fetch-page-full', url),
-  playMpc:              (url) =>         ipcRenderer.invoke('play-mpc', url),
-  stopMpc:              () =>            ipcRenderer.send('stop-mpc'),
 });
