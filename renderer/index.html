@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy" content="
+    default-src 'self' 'unsafe-inline' https: data: blob:;
+    script-src 'self' 'unsafe-inline' https: data: blob:;
+    style-src 'self' 'unsafe-inline' https: data: blob:;
+    img-src 'self' https: data: blob: anime4up:;
+    media-src 'self' https: data: blob: http:;
+    connect-src 'self' https: http: blob:;
+    font-src 'self' https: data:;
+    frame-src 'self' https: http:;
+    object-src 'none';
+    base-uri 'self';
+  " />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>StreamBox</title>
+  <link rel="stylesheet" href="./styles.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.5.15/hls.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dplayer@1.27.1/dist/DPlayer.min.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/dplayer@1.27.1/dist/DPlayer.min.css" />
+</head>
+<body>
+<div id="app">
+
+  <header class="topbar">
+    <div class="topbar-left"></div>
+    <div class="brand">⚡ StreamBox</div>
+    <div class="window-controls">
+      <button class="wc-btn" id="min-btn" title="تصغير">&#x2014;</button>
+      <button class="wc-btn" id="max-btn" title="تكبير">&#x25A1;</button>
+      <button class="wc-btn wc-close" id="close-btn" title="إغلاق">&#x2715;</button>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <nav class="sidebar-nav">
+        <button class="nav-btn active" id="btn-anime4up" onclick="switchSection('anime4up')">
+          <span class="nav-icon">🎌</span>
+          <span class="nav-label">Anime4up</span>
+        </button>
+        <button class="nav-btn" id="btn-4kanime" onclick="switchSection('4kanime')">
+          <span class="nav-icon">🎥</span>
+          <span class="nav-label">4K Anime</span>
+        </button>
+      </nav>
+    </aside>
+
+    <main class="content">
+      <div class="searchbar">
+        <input id="search-input" type="text" placeholder="🔍 ابحث عن أنمي..." />
+        <button onclick="searchAnime()">بحث</button>
+      </div>
+
+      <section id="home-panel">
+        <div id="anime-grid"></div>
+      </section>
+
+      <section id="detail-panel">
+        <div id="detail-inner"></div>
+      </section>
+
+      <section id="player-area">
+        <div class="player-toolbar">
+          <button onclick="goBack()">&#8592;</button>
+          <button onclick="goForward()">&#8594;</button>
+          <button onclick="reloadPage()">&#x27F3;</button>
+          <button onclick="showHome()">🏠</button>
+          <span id="current-url"></span>
+        </div>
+        <webview id="webview" src="about:blank"
+          webpreferences="allowRunningInsecureContent=yes, javascript=yes"
+          useragent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0.0.0 Safari/537.36">
+        </webview>
+      </section>
+    </main>
+  </div>
+</div>
+
+<script src="./renderer.js"></script>
+<script>
+  document.getElementById('min-btn').addEventListener('click', () => {
+    if (window.electronAPI?.minimize) window.electronAPI.minimize();
+    else try { require('electron').ipcRenderer.send('minimize-window'); } catch(e) {}
+  });
+  document.getElementById('max-btn').addEventListener('click', () => {
+    if (window.electronAPI?.maximize) window.electronAPI.maximize();
+    else try { require('electron').ipcRenderer.send('maximize-window'); } catch(e) {}
+  });
+  document.getElementById('close-btn').addEventListener('click', () => {
+    if (window.electronAPI?.close) window.electronAPI.close();
+    else try { require('electron').ipcRenderer.send('close-window'); } catch(e) {}
+  });
+</script>
+</body>
+</html>
