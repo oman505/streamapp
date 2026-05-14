@@ -290,8 +290,8 @@ function createWindow() {
   ipcMain.on('minimize-window', () => mainWin.minimize());
   ipcMain.on('maximize-window', () => mainWin.isMaximized() ? mainWin.unmaximize() : mainWin.maximize());
   ipcMain.on('close-window',    () => mainWin.close());
-  ipcMain.on('fullscreen-window', () => mainWin.setFullScreen(!mainWin.isFullScreen()));
 
+  ipcMain.on('fullscreen-window', () => mainWin.setFullScreen(!mainWin.isFullScreen()));
   ipcMain.handle('fetch-page', async (event, url) => {
     const res = await axios.get(url, {
       headers: {
@@ -433,13 +433,10 @@ function createWindow() {
     const partition = `persist:extract_${++extractCount}`;
     const host      = (() => { try { return new URL(serverUrl).hostname; } catch { return ''; } })();
     const isDood    = host.includes('dood') || host.includes('dsvplay') || host.includes('doodstream');
-const isVoe     = host.includes('voe.sx') || host.includes('voe.click') || host.includes('voe.bar') || host.includes('voe');
-const isVk      = host.includes('vk.com') || host.includes('vkvideo.ru');
-const isVidea   = host.includes('videa.hu');
-const isMegamax = host.includes('megamax') || host.includes('mega4up');
-const isLarhu   = host.includes('larhu');
-const isUqload  = host.includes('uqload');
-const isShare4  = host.includes('share4max');
+    const isVoe     = host.includes('voe');
+    const isLarhu   = host.includes('larhu');
+    const isUqload  = host.includes('uqload');
+    const isShare4  = host.includes('share4max');
 
     return new Promise((resolve) => {
       const win = new BrowserWindow({
@@ -481,7 +478,8 @@ const isShare4  = host.includes('share4max');
 
       win.webContents.on('did-finish-load', async () => {
         try {
-                  const waitTime = isDood ? 20000 : isVoe ? 15000 : isVk ? 16000 : isVidea ? 15000 : isMegamax ? 15000 : isLarhu ? 12000 : isUqload ? 12000 : isShare4 ? 12000 : 12000;
+                  const waitTime = isDood ? 20000 : isVoe ? 15000 : isLarhu ? 8000 : isUqload ? 8000 : isShare4 ? 10000 : 10000;
+          await new Promise(r => setTimeout(r, waitTime));
           if (resolved) return;
 
           const videoUrl = await win.webContents.executeJavaScript(`
@@ -500,22 +498,19 @@ const isShare4  = host.includes('share4max');
                 return (m1 && m1[0]) || (m2 && m2[0]) || null;
               }
               if (host.includes('voe')) {
-              try {
-                const srcs = window.sources || window.videoSources || window.hlsUrl || window.hls_url;
-                if (typeof srcs === 'string' && srcs.startsWith('http')) return srcs;
-                if (srcs && typeof srcs === 'object') {
-                  const hls = srcs.hls || srcs.mp4 || Object.values(srcs)[0];
-                  if (hls && hls.startsWith('http')) return hls;
-                }
-              } catch {}
-              const allText = [...document.querySelectorAll('script')].map(s => s.textContent || '').join('\n');
-              // Try atob decoded URLs (Voe obfuscates with base64)
-              const b64Matches = allText.match(/atob\(['"]([A-Za-z0-9+/=]{20,})['"]\)/g) || [];
-              for (const m of b64Matches) { try { const d = atob(m.match(/atob\(['"]([^'"]+)['"]\)/)[1]); if (d.startsWith('http') && (d.includes('.m3u8') || d.includes('.mp4'))) return d; } catch {} }
-              const m1 = allText.match(/https?:\/\/[^"'`\s]+\.m3u8[^"'`\s]*/);
-              const m2 = allText.match(/https?:\/\/[^"'`\s]+\.mp4[^"'`\s]*/);
-              return (m1 && m1[0]) || (m2 && m2[0]) || null;
-            }
+                try {
+                  const srcs = window.sources || window.videoSources || window.hlsUrl;
+                  if (typeof srcs === 'string' && srcs.startsWith('http')) return srcs;
+                  if (srcs && typeof srcs === 'object') {
+                    const hls = srcs.hls || srcs.mp4 || Object.values(srcs)[0];
+                    if (hls && hls.startsWith('http')) return hls;
+                  }
+                } catch {}
+                const allText = [...document.querySelectorAll('script')].map(s => s.textContent || '').join('\\n');
+                const m1 = allText.match(/https?:\\/\\/[^"'\`\\s]+\\.m3u8[^"'\`\\s]*/);
+                const m2 = allText.match(/https?:\\/\\/[^"'\`\\s]+\\.mp4[^"'\`\\s]*/);
+                return (m1 && m1[0]) || (m2 && m2[0]) || null;
+              }
               if (host.includes('uqload')) {
                 const v = document.querySelector('video source, video');
                 if (v) { const src = v.getAttribute('src') || v.src; if (src && src.startsWith('http')) return src; }
