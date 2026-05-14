@@ -616,6 +616,31 @@ function createWindow() {
       });
     });
   });
+
+  let mpvProcess = null;
+  ipcMain.handle('play-mpv', async (_, videoUrl) => {
+    try {
+      if (mpvProcess) { try { mpvProcess.kill(); } catch {} mpvProcess = null; }
+      const { spawn } = require('child_process');
+      const wid = mainWin.getNativeWindowHandle().readBigUInt64LE(0).toString();
+      mpvProcess = spawn('mpv', [
+        `--wid=${wid}`,
+        '--no-terminal',
+        '--keep-open=yes',
+        '--cache=yes',
+        '--demuxer-max-bytes=50MiB',
+        videoUrl
+      ], { detached: false });
+      mpvProcess.on('error', (e) => console.error('mpv error:', e.message));
+      mpvProcess.on('close', () => { mpvProcess = null; });
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, error: e.message };
+    }
+  });
+  ipcMain.on('stop-mpv', () => {
+    if (mpvProcess) { try { mpvProcess.kill(); } catch {} mpvProcess = null; }
+  });
 }
 
 app.whenReady().then(createWindow);

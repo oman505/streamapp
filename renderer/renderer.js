@@ -163,6 +163,12 @@ async function loadServer(url, btn) {
   }
 
   if (loading) loading.remove();
+  const mpvBtn = document.createElement('button');
+  mpvBtn.id = 'mpv-btn';
+  mpvBtn.textContent = '🎬 تشغيل بـ MPV';
+  mpvBtn.style.cssText = 'display:block;margin:6px 0 10px;padding:8px 20px;background:#7c3aed;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;';
+  mpvBtn.onclick = async () => { mpvBtn.textContent = '⏳...'; mpvBtn.disabled=true; const r=await window.electronAPI.playMpv(playableUrl); mpvBtn.textContent = r?.ok ? '✅ MPV يعمل' : ('❌ '+(r?.error||'فشل')); if(!r?.ok) mpvBtn.disabled=false; };
+  document.getElementById('player-wrap')?.prepend(mpvBtn);
 
   currentDPlayer = new DPlayer({
     container: document.getElementById('dplayer-container'),
