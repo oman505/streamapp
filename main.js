@@ -616,7 +616,7 @@ function createWindow() {
       });
     });
   });
-
+}
   let mpvProcess = null;
 
 async function getMpvPath() {
