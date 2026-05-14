@@ -692,4 +692,4 @@ app.whenReady().then(createWindow);
 app.on('window-all-closed', () => {
   if (proxyServer) proxyServer.close();
   if (process.platform !== 'darwin') app.quit();
-});}
+});
